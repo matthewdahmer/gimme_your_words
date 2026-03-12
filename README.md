@@ -1,6 +1,6 @@
 # gimme-your-words
 
-Download Medium articles for personal use. Supports paywalled (member-only) content via browser cookie authentication.
+Download articles from the web for personal use. Supports paywalled content via browser cookie authentication. Works with Medium, Substack, NYT, and any site — detected automatically via site profiles.
 
 ## Installation
 
@@ -16,17 +16,20 @@ That's it — no manual virtualenv creation or pip needed.
 
 ## Cookie Setup
 
-Export your Medium cookies from the browser DevTools **Network tab**:
+Cookies let the tool authenticate as you, so paywalled content is accessible.
 
-1. Open DevTools → **Network** tab → refresh medium.com
-2. Click any `medium.com` request → **Request Headers** → copy the full `cookie:` header value
-3. Run this in the **Console** tab, pasting your cookie string in place of `document.cookie`:
+Export cookies from the browser DevTools **Network tab**:
+
+1. Log in to the site you want to scrape
+2. Open DevTools → **Network** tab → refresh the page
+3. Click any request to that site → **Request Headers** → copy the full `cookie:` header value
+4. Run this in the **Console** tab, replacing `YOUR_SITE_DOMAIN` and pasting your cookie string:
 
 ```javascript
 copy(JSON.stringify(
-  document.cookie.split('; ').map(c => {
+  "PASTE_COOKIE_HEADER_VALUE_HERE".split('; ').map(c => {
     const [name, ...rest] = c.split('=');
-    return { name, value: rest.join('='), domain: '.medium.com', path: '/' };
+    return { name, value: rest.join('='), domain: '.YOUR_SITE_DOMAIN', path: '/' };
   })
 ))
 ```
@@ -47,7 +50,7 @@ uv run gimme-your-words check-cookies cookies.json
 
 ### Single article
 ```bash
-uv run gimme-your-words fetch https://medium.com/@author/article -c cookies.json
+uv run gimme-your-words fetch https://example.com/some-article -c cookies.json
 ```
 
 ### Multiple URLs as arguments
@@ -63,8 +66,8 @@ uv run gimme-your-words fetch -u urls.txt -c cookies.json
 `urls.txt` — one URL per line, `#` for comments:
 ```
 # AI articles
-https://medium.com/@author/article-one
-https://medium.com/@author/article-two
+https://example.com/article-one
+https://anotherblog.com/article-two
 ```
 
 ### All options
@@ -74,7 +77,10 @@ https://medium.com/@author/article-two
 -o, --output-dir     Output directory (default: ./articles)
 --format             markdown | text | html  (default: markdown)
 --delay              Seconds between requests (default: 1.5)
---no-headless        Show browser window (useful for debugging)
+--no-headless        Show browser window (useful for Cloudflare challenges)
+--warmup             Visit the site root first to establish a session
+--warmup-url         Override the warmup URL
+--profiles           Path to an additional site profiles YAML file
 ```
 
 ### Output formats
@@ -84,10 +90,52 @@ https://medium.com/@author/article-two
 | `text`     | Plain ingestion, embeddings     |
 | `html`     | Full fidelity, archiving        |
 
+## Site Profiles
+
+Site profiles tell the scraper how to extract content and detect paywalls for known sites. Run `list-profiles` to see what's built in:
+
+```bash
+uv run gimme-your-words list-profiles
+```
+
+To add support for a new site, create a YAML file:
+
+```yaml
+profiles:
+  - name: My Blog
+    match_domains:
+      - "myblog.com"
+      - "*.myblog.com"
+    content:
+      selector: ".post-body"
+      fallback: "article"
+    paywall:
+      selector: ".subscribe-wall"
+      text:
+        - "Subscribe to continue reading"
+      min_length: 1000
+    warmup_url: null
+```
+
+Then pass it with `--profiles`:
+```bash
+uv run gimme-your-words fetch -u urls.txt -c cookies.json --profiles my_profiles.yaml
+```
+
+## Cloudflare-Protected Sites
+
+Some sites challenge automated browsers. The most reliable workaround:
+
+```bash
+uv run gimme-your-words fetch -u urls.txt -c cookies.json --no-headless --warmup --delay 5
+```
+
+This opens a visible browser window, visits the site homepage first to establish a valid session, and waits for you to solve any challenge before proceeding.
+
 ## Programmatic Use
 
 ```python
-from gimme_your_words import MediumScraper, ScrapeConfig, load_cookies
+from gimme_your_words import ArticleScraper, ScrapeConfig, load_cookies
 from pathlib import Path
 
 cookies = load_cookies("cookies.json")
@@ -99,11 +147,11 @@ config = ScrapeConfig(
     delay=1.5,
 )
 
-scraper = MediumScraper(config)
+scraper = ArticleScraper(config)
 
 urls = [
-    "https://medium.com/@author/article-one",
-    "https://medium.com/@author/article-two",
+    "https://example.com/article-one",
+    "https://anotherblog.com/article-two",
 ]
 
 results = scraper.scrape_all(urls)
@@ -113,6 +161,8 @@ for r in results:
         print(f"Saved: {r.output_path}")
     elif r.paywalled:
         print(f"Paywalled: {r.url}")
+    elif r.skipped:
+        print(f"Already downloaded: {r.url}")
     else:
         print(f"Error: {r.url} — {r.error}")
 ```
