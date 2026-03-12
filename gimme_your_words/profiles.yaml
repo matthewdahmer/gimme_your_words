@@ -1,0 +1,161 @@
+# =============================================================================
+# Article Scraper — Site Profiles
+# =============================================================================
+#
+# Each profile defines how to extract article content from a site.
+# Profiles are matched against the request URLs made during page load,
+# so custom domains (e.g. a Medium publication on its own domain) are
+# detected automatically.
+#
+# FIELDS:
+#   name          - Human-readable label
+#   match_domains - List of domains to match against network requests.
+#                   Supports wildcards (*). Match is against ANY request
+#                   made during page load, not just the top-level URL.
+#   content       - How to find the article body (first match wins)
+#     selector    - CSS selector for the article container
+#     fallback    - CSS selector to try if the primary fails
+#   paywall       - How to detect a paywall (all fields are optional)
+#     selector    - CSS selector that only exists when paywalled
+#     text        - List of strings; if ANY appear in body text, flag as paywalled
+#     min_length  - If body text is shorter than this AND another signal fires,
+#                   flag as paywalled. Prevents false positives on short articles.
+#   warmup_url    - URL to visit before scraping to establish a session
+#                   (useful for Cloudflare-protected sites)
+#
+# ADDING A NEW SITE:
+#   Copy an existing profile, update match_domains and content.selector.
+#   To find the right selector: open DevTools on an article, inspect the
+#   outermost element that wraps just the article body (not nav/footer),
+#   right-click → Copy → Copy selector.
+#
+# =============================================================================
+
+profiles:
+
+  - name: Medium
+    match_domains:
+      - "*.medium.com"
+      - "medium.com"
+    content:
+      selector: "article"
+      fallback: "main"
+    paywall:
+      selector: "[data-testid='paywall']"
+      text:
+        - "Member-only story"
+      min_length: 2000
+    warmup_url: "https://medium.com"
+
+  - name: Substack
+    match_domains:
+      - "*.substack.com"
+      - "substack.com"
+    content:
+      selector: ".available-content"
+      fallback: "article"
+    paywall:
+      selector: ".paywall"
+      text:
+        - "This post is for paid subscribers"
+        - "Subscribe to read"
+      min_length: 1000
+    warmup_url: null
+
+  - name: Towards Data Science
+    match_domains:
+      - "towardsdatascience.com"
+      - "*.towardsdatascience.com"
+    content:
+      selector: "article"
+      fallback: "main"
+    paywall:
+      selector: "[data-testid='paywall']"
+      text:
+        - "Member-only story"
+      min_length: 2000
+    warmup_url: "https://towardsdatascience.com"
+
+  - name: The Atlantic
+    match_domains:
+      - "theatlantic.com"
+      - "*.theatlantic.com"
+    content:
+      selector: ".article-body"
+      fallback: "article"
+    paywall:
+      selector: ".paywall-bar"
+      text:
+        - "Subscribe to The Atlantic"
+      min_length: 1500
+    warmup_url: null
+
+  - name: New York Times
+    match_domains:
+      - "nytimes.com"
+      - "*.nytimes.com"
+    content:
+      selector: "[data-testid='article-body']"
+      fallback: "article"
+    paywall:
+      selector: "[data-testid='gateway-content']"
+      text:
+        - "Create a free account"
+        - "Subscribe for full access"
+      min_length: 2000
+    warmup_url: null
+
+  - name: Washington Post
+    match_domains:
+      - "washingtonpost.com"
+      - "*.washingtonpost.com"
+    content:
+      selector: ".article-body"
+      fallback: "article"
+    paywall:
+      selector: ".paywall-overlay"
+      text:
+        - "Subscribe to continue reading"
+      min_length: 1500
+    warmup_url: null
+
+  - name: Wired
+    match_domains:
+      - "wired.com"
+      - "*.wired.com"
+    content:
+      selector: "[data-testid='ContentHeaderRubric']"
+      fallback: "article"
+    paywall:
+      selector: ".paywall"
+      text:
+        - "Subscribe to WIRED"
+      min_length: 1500
+    warmup_url: null
+
+  - name: Ghost (generic)
+    match_domains:
+      - "ghost.io"
+      - "*.ghost.io"
+    content:
+      selector: ".gh-content"
+      fallback: "article"
+    paywall:
+      selector: ".gh-post-upgrade-cta"
+      text:
+        - "Subscribe to get access"
+      min_length: 500
+    warmup_url: null
+
+  # Generic fallback — used when no other profile matches.
+  # Tries common article container patterns in order.
+  - name: Generic
+    match_domains:
+      - "*"
+    content:
+      selector: "article"
+      fallback: "main"
+    paywall:
+      text: []
+      min_length: 0
+    warmup_url: null
